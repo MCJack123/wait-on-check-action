@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for tests to succeed
-        uses: lewagon/wait-on-check-action@v1.0.0
+        uses: lewagon/wait-on-check-action@v1.3.1
         with:
           ref: ${{ github.ref }}
           check-name: 'Run tests'
@@ -45,6 +45,29 @@ jobs:
       ...
 ```
 
+## GHE Support
+
+For GHE support you just need to pass in `api-endpoint` as an input.
+
+```yml
+name: Publish
+
+on: [push]
+
+jobs:
+  publish:
+    name: Publish the package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for tests to succeed
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Run tests'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          api-endpoint: YOUR_GHE_API_BASE_URL # Fed to https://octokit.github.io/octokit.rb/Octokit/Configurable.html#api_endpoint-instance_method
+      ...
+```
 ## Alternatives
 
 If you can keep the dependent jobs in a single workflow:
@@ -104,7 +127,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Wait for tests to succeed
-        uses: lewagon/wait-on-check-action@v1.0.0
+        uses: lewagon/wait-on-check-action@v1.3.1
         with:
           ref: master
           check-name: test
@@ -168,7 +191,7 @@ jobs:
 To inspect the names as they appear to the API:
 
 ```bash
-curl -i -u username:$token \
+curl -u username:$token \
 https://api.github.com/repos/OWNER/REPO/commits/REF/check-runs \
 -H 'Accept: application/vnd.github.antiope-preview+json' | jq '[.check_runs[].name]'
 ```
@@ -188,13 +211,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for other checks to succeed
-        uses: lewagon/wait-on-check-action@v1.0.0
+        uses: lewagon/wait-on-check-action@v1.3.1
         with:
           ref: ${{ github.ref }}
           running-workflow-name: 'Publish the package'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
       ...
+```
+
+#### Using running workflow name in reusable workflows
+
+Using this action in a reusable workflow means accepting a constraint that all calling jobs will have the same name.  For example, all calling workflows must call their jobs `caller` (or some more relevant constant) so that if the reused workflow containing the job that uses this action to wait is called `callee` then the task can successfully wait on `caller / callee`.  Working example follows.
+
+.github/workflows/caller.yml
+
+```yml
+on:
+  push:
+jobs:
+  caller:
+    uses: ./.github/workflows/callee.yml
+```
+
+.github/workflows/callee.yml
+
+```yml
+on:
+  workflow_call:
+jobs:
+  callee:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Other Workflows
+        uses: lewagon/wait-on-check-action@v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          running-workflow-name: 'caller / callee'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
 ```
 
 ### Allowed conclusions
@@ -212,7 +267,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Wait for tests to succeed
-        uses: lewagon/wait-on-check-action@v1.0.0
+        uses: lewagon/wait-on-check-action@v1.3.1
         with:
           ref: ${{ github.ref }}
           check-name: 'Run tests'
@@ -262,8 +317,3 @@ The solution would be to fetch all pages to gather all running workflows if they
 There are sample workflows in the `.github/workflows` directory. Two of them are logging tasks to emulate real-world actions being executed that have to be waited. The important workflows are the ones that use the wait-on-check-action.
 
 A workflow named "wait_omitting-check-name" waits for the two simple-tasks, while the one named "wait_using_check-name" only waits for "simple-task".
-
-<!-- Links -->
-
-[rspec_shield]: https://github.com/lewagon/wait-on-check-action/workflows/RSpec%20tests/badge.svg
-[checks_api]: https://developer.github.com/v3/checks/runs/#list-check-runs-for-a-git-reference
